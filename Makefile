@@ -9,25 +9,29 @@ INCDIR = includes
 
 
 all: server client
+		mkfifo  bin/client_server_pipe
+		mkfifo  bin/server_client_pipe 
 
 server: bin/aurrasd
 
 client: bin/aurras
 
 bin/aurrasd: obj/aurrasd.o
-	gcc -g obj/aurrasd.o -o bin/aurrasd
+				gcc -g obj/aurrasd.o -o bin/aurrasd
 
 obj/aurrasd.o: src/aurrasd.c
-	gcc -Wall -g -c src/aurrasd.c obj/aurrasd.o
+				gcc -Wall -g -c src/aurrasd.c -o obj/aurrasd.o
 
 bin/aurras: obj/aurras.o
-	gcc -g obj/aurras.o -o bin/aurras
+				gcc -g obj/aurras.o -o bin/aurras
 
 obj/aurras.o: src/aurras.c
-	gcc -Wall -g -c src/aurras.c obj/aurras.o
+				gcc -Wall -g -c src/aurras.c -o obj/aurras.o
 
 clean:
-	rm obj/* tmp/* bin/{aurras,aurrasd}
+	rm -f obj/* tmp/* bin/{aurras,aurrasd} 
+	rm -f bin/client_server_pipe
+	rm -f bin/server_client_pipe
 
 
 test:
@@ -40,6 +44,6 @@ test:
 #	rm -f aurrasd
 #	rm -f server_client_pipe
 #	rm -f client_server_pipe
-	#rm -f error.txt
-	#rm -f log.txt
-	#rm -f log.idx
+#	rm -f error.txt
+# 	rm -f log.txt
+#	rm -f log.idx
