@@ -4,13 +4,13 @@ OBJDIR = obj
 SRCDIR = src
 INCDIR = includes
 #OBJS = $(OBJDIR)/auxs.o $(OBJDIR)/task.o
-#SERVER_OBJS = $(OBJDIR)/argusd.o $(OBJDIR)/server_child.o
-#CLIENT_OBJS = $(OBJDIR)/argus.o
+#SERVER_OBJS = $(OBJDIR)/aurrasd.o $(OBJDIR)/server_child.o
+#CLIENT_OBJS = $(OBJDIR)/aurras.o
 
 
 all: server client
-		mkfifo  bin/client_server_pipe
-		mkfifo  bin/server_client_pipe 
+		mkfifo bin/client_server_pipe
+		mkfifo bin/server_client_pipe 
 
 server: bin/aurrasd
 
