@@ -180,6 +180,21 @@ int getClientefromPid(int pid, ListaT l) {
   return -1;
 }
 
+char* getExecfromFiltro(char* filtro, ListaF l) {
+  if(!l)
+    return NULL;
+
+  ListaF aux = l;
+  for(; aux; aux = aux->prox) {
+
+    if (!strcmp(aux->filtro,filtro)) {
+      return aux->executavel;
+    }
+  }
+
+  return NULL;
+}
+
 void printLista(ListaT l, int fd) {
   if(!l)
     write(fd, "Não há tarefas em execução\n", 31);
@@ -240,7 +255,7 @@ int filtroDisponivel(ListaF l, char* filtro) {
     if(aux && (aux->curr == aux->max))
       res++;
 
-  return res;
+    return res;
 }
 
 void filtroInc(ListaF l, char* filtro,int pid) {
@@ -290,20 +305,17 @@ void lerConfig(char* file) {
   char* token;
 
 
-while ((n = readln(fd_config,buffer,1024 * sizeof(char))) > 0) {
-  token = strtok(buffer," ");
-  filtro = strdup(token);
-  token = strtok(NULL," ");
-  exec = strdup(token);
-  token = strtok(NULL," ");
-  max = strdup(token);
+  while ((n = readln(fd_config,buffer,1024 * sizeof(char))) > 0) {
+    token = strtok(buffer," ");
+    filtro = strdup(token);
+    token = strtok(NULL," ");
+    exec = strdup(token);
+    token = strtok(NULL," ");
+    max = strdup(token);
 
-  printf("%s %s %s\n", filtro,exec,max);
+//   printf("%s %s %s\n", filtro,exec,max);
   listaFiltros = adicionaFiltro(atoi(max),filtro,exec,listaFiltros);
-}
-
-    //listaFiltros = adicionaFiltro(3,"Alto","exec_Alto",listaFiltros);
-    //listaFiltros = adicionaFiltro(3,"Baixo","exec_Baixo",listaFiltros);
+  }
 }
 
 void sigChild_handler(int signum) {
@@ -321,29 +333,130 @@ void sigChild_handler(int signum) {
   //VERIFICAR E EXECUTAR TAREFAS PENDENTES----------------------
 }
 
+int executar(char* input,char* output,char** filtros,int numFiltros) {
+//   printf("%s %s %d\n", input,output,numFiltros);
+  for (int i = 0; i < numFiltros; ++i)
+  {
+    // printf("%s\n", filtros[i]);
+  }
+
+  int fd_output = open(output, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+  int fd_input = open(input, O_RDONLY);
+  char* path = malloc(1024 * sizeof(char));
+  strcpy(path,"aurrasd-filters/");
+
+//   printf("%d %d\n", fd_output, fd_input);
+
+    int n = numFiltros;                         // número de comandos == número de filhos
+    int p[n-1][2];                              // -> matriz com os fd's dos pipes
+    int status[n];                              // -> array que guarda o return dos filhos
 
 
-void executar(char** filtros, int numeroFiltros){
+    if(numFiltros == 1) {
+      filtros[0] = strcat(path,filtros[0]);
+      dup2(fd_input,0);
+      close(fd_input);
+      dup2(fd_output,1);
+      close(fd_output);
 
-    
+      execlp(filtros[0],filtros[0],NULL);
 
+      return 0;
+    }
+
+
+    // criar os pipes conforme o número de comandos
+    for (int i = 0; i < n-1; i++) {
+        if (pipe(p[i]) == -1) {
+            perror("Pipe não foi criado");
+            return -1;
+        }
+    }
+
+    // criar processos filhos para executar cada um dos comandos
+    for (int i = 0; i < n; i++) {
+      filtros[i] = strcat(path,filtros[i]);
+
+        if (i == 0) {
+            switch(fork()) {
+                case -1:
+                    perror("Fork não foi efetuado");
+                    return -1;
+                case 0:
+                    // codigo do filho 0
+
+                    dup2(fd_input,0);
+                    close(p[i][0]);
+
+                    dup2(p[i][1],1);
+                    close(p[i][1]);
+
+                    execlp(filtros[i],filtros[i],NULL);
+
+                    _exit(0);
+                default:
+                    close(p[i][1]);
+            }
+        }
+        else if (i == n-1) {
+            switch(fork()) {
+                case -1:
+                    perror("Fork não foi efetuado");
+                    return -1;
+                case 0:
+                    // codigo do filho n-1
+
+                    dup2(p[i-1][0],0);
+                    close(p[i-1][0]);
+
+                    dup2(fd_output,1);
+                    close(p[i][1]);
+
+                    execlp(filtros[i],filtros[i],NULL);
+
+                    _exit(0);
+                default:
+                    close(p[i-1][0]);
+            }
+        }
+        else {
+            switch(fork()) {
+                case -1:
+                    perror("Fork não foi efetuado");
+                    return -1;
+                case 0:
+                    // codigo do filho i
+
+                    dup2(p[i-1][0],0);
+                    close(p[i-1][0]);
+
+                    dup2(p[i][1],1);
+                    close(p[i][1]);
+
+
+                    execlp(filtros[i],filtros[i],NULL);
+
+                    _exit(0);
+                default:
+                    close(p[i-1][0]);
+                    close(p[i][1]);
+            }
+        }
+        // printf("%s", filtros[i]);
+        memset(path, 0, 30);
+        strcpy(path,"aurrasd-filters/"); // /bin
+    }
+
+    for (int i = 0; i < n; i++)
+    {
+        wait(&status[i]);
+
+        if (WIFEXITED(status[i])) {
+            // printf("[PAI]: filho terminou com %d\n", WEXITSTATUS(status[i]));
+        }
+    }
+    return 1;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 int main (int argc, char** argv){
     int fd_fifo_client_server;
@@ -364,13 +477,6 @@ int main (int argc, char** argv){
         while ((fd_fifo_client_server = open("client_server_pipe", O_RDONLY)) == -1) {
             perror("Error opening fifo1\n");
         }
-/*
-        if((fd_fifo_server_client = open("server_client_pipe", O_WRONLY)) == -1){
-            perror("Error opening fifo2");
-            return -1;
-        }*/
-
-
 
         n = read(fd_fifo_client_server,buffer,sizeof(char) * 1024);
         close(fd_fifo_client_server);
@@ -392,11 +498,12 @@ int main (int argc, char** argv){
             }
             else if(!strcmp(comando[0], "transform") && comandoSize > 4 && comandoSize < 10) {
                 write(fd_fifo_server_client, "1", sizeof(char));
-                int res;
+                int res=0;
                 for(int t = 3;t < comandoSize; t++){
                     res += filtroDisponivel(listaFiltros,comando[t]);
                 }
 
+                char**filtros = NULL;
                 char * input = comando[1];
                 char * output = comando[2];
 
@@ -405,6 +512,11 @@ int main (int argc, char** argv){
                 strcpy(tarefa,comando[0]);
                 int i = 1;
                 while(i < comandoSize - 1) {
+                    if(i > 2) {
+                      filtros = (char**) realloc(filtros, (i + 1) * sizeof(char*));
+                      filtros[i - 3] = strdup(getExecfromFiltro(comando[i],listaFiltros));
+                    }
+
                     strcat(tarefa," ");
                     strcat(tarefa,comando[i]);
                     i++;
@@ -412,20 +524,20 @@ int main (int argc, char** argv){
 
 
                 if(res != 0) {
-                    kill(atoi(comando[5]),SIGUSR2);
-                    pendentes = adicionaTarefa(pid,atoi(comando[5]),numeroTarefa,tarefa,pendentes);
+                    kill(atoi(comando[comandoSize - 1]),SIGUSR2);
+                    pendentes = adicionaTarefa(pid,atoi(comando[comandoSize - 1]),numeroTarefa,tarefa,pendentes);
                 }
                 else {
 
                 //executar comando
                     if(!(pid = fork())){
-                        printf("Comando!!\n");
-                        kill(atoi(comando[5]),SIGUSR1);
+                        kill(atoi(comando[comandoSize - 1]),SIGUSR1);
                         //EXECUTAR TAREFA
-                        sleep(5);
+                        executar(input,output,filtros,comandoSize - 4);
+                        //sleep(3);
                         _exit(0);
                     } else {
-                        execucao = adicionaTarefa(pid,atoi(comando[5]),numeroTarefa,tarefa,execucao);
+                        execucao = adicionaTarefa(pid,atoi(comando[comandoSize - 1]),numeroTarefa,tarefa,execucao);
                         numeroTarefa++;
 
                         for(int t = 3;t < comandoSize; t++)
